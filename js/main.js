@@ -11,8 +11,6 @@ const loader = document.querySelector(".loader");
 const progress = document.querySelector(".progress");
 const toggle = document.querySelector(".menu-btn");
 const overlay = document.querySelector("#nav-overlay");
-const proc = document.querySelector(".proc");
-const procPin = document.querySelector(".proc-pin");
 const headerNav = [...document.querySelectorAll(".top-nav a")];
 
 document.querySelectorAll("[data-year]").forEach((node) => {
@@ -132,99 +130,112 @@ document.addEventListener("click", (event) => {
   scrollToPanel(index);
 });
 
-let target = 0;
-let current = 0;
-let raf = 0;
+const pin = stage.querySelector(".stage-pin");
+const metrics = {
+  stageTop: 0,
+  stageTravel: 1,
+  pinWidth: 0,
+  scrollMax: 1,
+  sections: [],
+};
+let slateIndex = -1;
+let navHref = "";
+let frame = 0;
+let viewportBox = { w: window.innerWidth, h: window.innerHeight };
 
-const measure = () => {
-  if (!filmOn()) return 0;
-  const travel = stage.offsetHeight - window.innerHeight;
-  if (travel <= 0) return 0;
-  return Math.min(1, Math.max(0, (window.scrollY - stage.offsetTop) / travel));
+const cacheMetrics = () => {
+  metrics.stageTop = stage.offsetTop;
+  metrics.stageTravel = Math.max(1, stage.offsetHeight - window.innerHeight);
+  metrics.pinWidth = pin.clientWidth;
+  metrics.scrollMax = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+  metrics.sections = [...document.querySelectorAll("main section[id], .panel[id]")].map((section) => ({
+    id: section.id,
+    top: section.offsetTop,
+    inStage: stage.contains(section),
+  }));
 };
 
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitWords);
+const filmProgress = (y) => {
+  if (!filmOn()) return 0;
+  return Math.min(1, Math.max(0, (y - metrics.stageTop) / metrics.stageTravel));
+};
+
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => {
+    fitWords();
+    cacheMetrics();
+    if (filmOn()) paintFilm(filmProgress(window.scrollY));
+  });
+}
 
 const paintFilm = (p) => {
   const n = panels.length;
-  track.style.transform = `translate3d(${((-p * (n - 1)) / n) * 100}%, 0, 0)`;
+  const shift = metrics.pinWidth
+    ? -p * (n - 1) * metrics.pinWidth
+    : ((-p * (n - 1)) / n) * 100;
+  const unit = metrics.pinWidth ? "px" : "%";
+  track.style.transform = `translate3d(${shift}${unit}, 0, 0)`;
   const index = Math.round(p * (n - 1));
+  if (index === slateIndex || !slate) return;
+  slateIndex = index;
   const panel = panels[index];
-  if (panel && slate) {
-    slate.textContent = `${String(index + 1).padStart(2, "0")} — ${panel.dataset.name || ""}`;
-  }
+  if (panel) slate.textContent = `${String(index + 1).padStart(2, "0")} — ${panel.dataset.name || ""}`;
 };
 
-const kick = () => {
-  if (raf || !filmOn()) return;
-  const step = () => {
-    target = measure();
-    current += (target - current) * 0.16;
-    if (Math.abs(target - current) < 0.0004) current = target;
-    paintFilm(current);
-    raf = Math.abs(target - current) > 0 ? requestAnimationFrame(step) : 0;
-  };
-  raf = requestAnimationFrame(step);
-};
-
-const paintProc = () => {
-  if (!filmOn()) return;
-  const start = proc.offsetTop;
-  const travel = proc.offsetHeight - window.innerHeight;
-  const p = travel <= 0 ? 0 : Math.min(1, Math.max(0, (window.scrollY - start) / travel));
-  const index = Math.min(3, Math.round(p * 3));
-  procPin.dataset.num = String(index + 1).padStart(2, "0");
-  proc.querySelectorAll("[data-step]").forEach((node) => {
-    node.classList.toggle("is-on", Number(node.dataset.step) === index);
-  });
-};
-
-const paintNav = () => {
-  const line = window.scrollY + window.innerHeight * 0.35;
+const paintNav = (y) => {
+  const line = y + window.innerHeight * 0.35;
   let currentId = "";
   if (filmOn()) {
-    const travel = stage.offsetHeight - window.innerHeight;
-    const p = travel <= 0 ? 0 : (window.scrollY - stage.offsetTop) / travel;
-    if (p >= 0 && p <= 1) {
-      const index = Math.round(p * (panels.length - 1));
-      currentId = index === 0 ? "uvod" : "pristup";
-    }
+    const p = (y - metrics.stageTop) / metrics.stageTravel;
+    if (p >= 0 && p <= 1) currentId = Math.round(p * (panels.length - 1)) === 0 ? "uvod" : "pristup";
   }
-  document.querySelectorAll("main section[id], .panel[id]").forEach((section) => {
-    if (stage.contains(section) && filmOn()) return;
-    if (section.offsetTop <= line) currentId = section.id;
+  metrics.sections.forEach((section) => {
+    if (section.inStage && filmOn()) return;
+    if (section.top <= line) currentId = section.id;
   });
   if (currentId === "ai" || currentId === "namieru") currentId = "pristup";
-  const href = currentId === "pristup" || currentId === "sluzby" || currentId === "proces" || currentId === "kontakt"
+  const href = currentId === "pristup" || currentId === "sluzby" || currentId === "kontakt"
     ? `#${currentId}`
     : "";
+  if (href === navHref) return;
+  navHref = href;
   headerNav.forEach((link) => {
     if (href && link.getAttribute("href") === href) link.setAttribute("aria-current", "true");
     else link.removeAttribute("aria-current");
   });
 };
 
-const onScroll = () => {
-  const max = document.documentElement.scrollHeight - window.innerHeight;
-  progress.style.transform = `scaleX(${max > 0 ? window.scrollY / max : 0})`;
-  paintProc();
-  paintNav();
-  kick();
+const paint = () => {
+  frame = 0;
+  const y = window.scrollY;
+  progress.style.transform = `scaleX(${y / metrics.scrollMax})`;
+  if (filmOn()) paintFilm(filmProgress(y));
+  paintNav(y);
 };
 
+const onScroll = () => {
+  if (frame) return;
+  frame = requestAnimationFrame(paint);
+};
+
+cacheMetrics();
 onScroll();
 window.addEventListener("scroll", onScroll, { passive: true });
+
 const onResize = () => {
+  const next = { w: window.innerWidth, h: window.innerHeight };
+  const widthChanged = Math.abs(next.w - viewportBox.w) > 2;
+  const heightJump = Math.abs(next.h - viewportBox.h) > 160;
+  viewportBox = next;
+  if (!widthChanged && !heightJump) return;
   syncFilm();
-  current = measure();
-  if (filmOn()) paintFilm(current);
-  onScroll();
+  cacheMetrics();
+  if (filmOn()) paintFilm(filmProgress(window.scrollY));
+  paint();
 };
 
 window.addEventListener("resize", onResize);
-if (window.visualViewport) {
-  window.visualViewport.addEventListener("resize", onResize);
-}
+
 
 if (filmOn() && location.hash) {
   const index = panelIndex(location.hash.slice(1));
