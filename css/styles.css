@@ -18,10 +18,6 @@
 
 html { scroll-behavior: smooth; }
 
-@media (pointer: coarse) {
-  html { scroll-behavior: auto; }
-}
-
 body.nav-open { overflow: hidden; }
 
 body {
@@ -293,10 +289,7 @@ html.has-cursor select { cursor: text; }
   pointer-events: none;
 }
 
-html.is-film .stage {
-  height: calc(var(--n) * var(--vh, 100svh));
-  touch-action: pan-y;
-}
+html.is-film .stage { height: calc(var(--n) * var(--vh, 100svh)); }
 
 html.is-film .stage-pin {
   position: sticky;
@@ -309,8 +302,6 @@ html.is-film .stage-track {
   flex-direction: row;
   width: calc(var(--n) * 100%);
   height: 100%;
-  transform: translate3d(0, 0, 0);
-  backface-visibility: hidden;
   will-change: transform;
 }
 
