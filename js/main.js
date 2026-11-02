@@ -76,7 +76,7 @@ const fitWords = () => {
   if (phone) fitType(phone, window.innerHeight * 0.16);
 };
 
-const filmOn = () => root.classList.contains("motion");
+const filmOn = () => root.classList.contains("motion") && desktop.matches;
 
 const HOLD = 0.65;
 const GLIDE = 0.85;
@@ -110,6 +110,8 @@ const progressForPanel = (index) => {
 const outside = [...document.querySelectorAll("main section[id]")].filter((section) => !stage.contains(section));
 
 let metrics = { top: 0, travel: 0, vh: 0, width: 0, max: 0, anchors: [] };
+let shown = -1;
+let lastTransform = "";
 
 const cacheLayout = () => {
   const vh = window.innerHeight;
@@ -123,13 +125,18 @@ const cacheLayout = () => {
     vh,
     width: window.innerWidth,
     max: Math.max(0, document.documentElement.scrollHeight - vh),
-    anchors: outside.map((section) => ({ id: section.id, top: section.offsetTop })),
+    anchors: (filmOn() ? outside : [...document.querySelectorAll("main section[id]")])
+      .map((section) => ({ id: section.id, top: section.offsetTop })),
   };
 };
 
 const syncFilm = () => {
   root.classList.toggle("is-film", filmOn());
-  if (!filmOn() && track) track.style.transform = "";
+  if (!filmOn() && track) {
+    track.style.transform = "";
+    lastTransform = "";
+    shown = -1;
+  }
   fitWords();
   cacheLayout();
 };
@@ -137,6 +144,8 @@ const syncFilm = () => {
 syncFilm();
 desktop.addEventListener("change", () => {
   syncFilm();
+  current = measure();
+  if (filmOn()) paintFilm(current);
   if (overlay.classList.contains("is-open") && desktop.matches) setNav(false);
 });
 
@@ -176,8 +185,6 @@ let target = 0;
 let current = 0;
 let raf = 0;
 let touch = false;
-let shown = -1;
-let lastTransform = "";
 
 const measure = () => {
   if (!filmOn() || metrics.travel <= 0) return 0;
