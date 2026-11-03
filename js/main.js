@@ -72,8 +72,7 @@ const fitWords = () => {
   document.querySelectorAll(".foot-word").forEach((el) => fitType(el, window.innerHeight * 0.26));
   const loaderWord = document.querySelector(".loader-word");
   if (loaderWord) fitType(loaderWord, window.innerHeight * 0.34);
-  const phone = document.querySelector(".phone");
-  if (phone) fitType(phone, window.innerHeight * 0.16);
+  document.querySelectorAll(".phone").forEach((el) => fitType(el, window.innerHeight * 0.16));
 };
 
 const filmOn = () => root.classList.contains("motion") && desktop.matches;
@@ -141,9 +140,89 @@ const syncFilm = () => {
   cacheLayout();
 };
 
+let revealIO = null;
+
+const bindReveal = () => {
+  if (!root.classList.contains("motion") || !("IntersectionObserver" in window)) return;
+  if (revealIO) revealIO.disconnect();
+  const groups = new WeakMap();
+  const mins = new WeakMap();
+  revealIO = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.intersectionRatio < (mins.get(entry.target) || 0.16)) return;
+      (groups.get(entry.target) || [entry.target]).forEach((el) => el.classList.add("is-in"));
+      revealIO.unobserve(entry.target);
+    });
+  }, { threshold: [0.16, 0.35, 0.62] });
+
+  const mark = (el, i) => {
+    el.classList.add("reveal");
+    el.style.setProperty("--d", `${i * 90}ms`);
+  };
+
+  panels.forEach((panel, index) => {
+    const nodes = [...panel.children];
+    nodes.forEach((el, i) => mark(el, i));
+    if (index === 0 || nodes.every((el) => el.classList.contains("is-in"))) return;
+    if (filmOn()) {
+      groups.set(panel, nodes);
+      mins.set(panel, 0.62);
+      revealIO.observe(panel);
+    } else {
+      nodes.forEach((el) => revealIO.observe(el));
+    }
+  });
+
+  [
+    document.querySelectorAll("#prehlad .wrap > .eyebrow, #prehlad h2, #prehlad .manifest-lead"),
+    document.querySelectorAll("#prehlad .split article"),
+    document.querySelectorAll("#sluzby .services-head > *"),
+    document.querySelectorAll("#sluzby .row"),
+    document.querySelectorAll("#kontakt .eyebrow, #kontakt h2, #kontakt .contact-lead, #kontakt .phones"),
+    document.querySelectorAll(".foot-bar, .foot-word"),
+  ].forEach((list) => {
+    [...list].forEach((el, i) => {
+      mark(el, i);
+      if (!el.classList.contains("is-in")) revealIO.observe(el);
+    });
+  });
+};
+
+const showHero = () => {
+  document.querySelectorAll("#uvod .reveal").forEach((el) => el.classList.add("is-in"));
+};
+
+const armHero = () => {
+  if (!root.classList.contains("motion")) return;
+  let started = false;
+  const start = () => {
+    if (started) return;
+    started = true;
+    setTimeout(showHero, 1000);
+  };
+  if (!loader) {
+    showHero();
+    return;
+  }
+  if (loader.classList.contains("is-gone")) {
+    start();
+    return;
+  }
+  const wait = new MutationObserver(() => {
+    if (!loader.classList.contains("is-gone")) return;
+    wait.disconnect();
+    start();
+  });
+  wait.observe(loader, { attributes: true, attributeFilter: ["class"] });
+  setTimeout(showHero, 4600);
+};
+
 syncFilm();
+bindReveal();
+armHero();
 desktop.addEventListener("change", () => {
   syncFilm();
+  bindReveal();
   current = measure();
   if (filmOn()) paintFilm(current);
   if (overlay.classList.contains("is-open") && desktop.matches) setNav(false);
